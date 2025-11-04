@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sky PDF Merger</title>
+
+  <!-- Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+
+  <style>
+    body {
+      background: linear-gradient(135deg, #a7cdf8, #5aa2e8 60%, #6bbff4);
+      min-height: 100vh;
+    }
+  </style>
+</head>
+
+<body class="flex items-center justify-center p-4">
+<div class="w-full max-w-xl bg-[#f6f9ff] shadow-2xl rounded-2xl p-8 space-y-8 border border-[#d5e7ff] backdrop-blur-sm">
+
+  <h1 class="text-center text-3xl font-extrabold text-[#2c6edb] drop-shadow">
+    💧 PDF Merger 💧
+  </h1>
+
+  <!-- Drop + Select Upload -->
+  <div id="dropArea" class="border-2 border-dashed border-[#88b8ff] rounded-xl p-8 text-center cursor-pointer bg-white/60 hover:bg-white/80 transition">
+    <p class="text-[#2c6edb] font-medium">Drop PDF here or click to select</p>
+    <p class="text-sm text-[#7da5d7]">PDF only, yes 👀</p>
+    <input id="pdfInput" type="file" multiple accept="application/pdf" class="hidden">
+  </div>
+
+  <!-- List of uploaded files -->
+  <ul id="fileList" class="space-y-2"></ul>
+
+  <button id="mergeBtn" class="w-full py-3 rounded-xl font-semibold text-white bg-[#2c6edb] hover:bg-[#1d56b0] transition shadow-lg">
+    Merge PDF ✨
+  </button>
+
+</div>
+
+<script>
+let filesArray = [];
+
+// klik area buat trigger upload
+document.getElementById("dropArea").addEventListener("click", () => {
+  document.getElementById("pdfInput").click();
+});
+
+// saat upload file lewat input
+document.getElementById("pdfInput").addEventListener("change", (e) => {
+  for (let file of e.target.files) filesArray.push(file);
+  renderList();
+});
+
+// render list ke UI
+function renderList() {
+  const fileList = document.getElementById("fileList");
+  fileList.innerHTML = "";
+  filesArray.forEach((file, i) => {
+    fileList.innerHTML += `
+      <li data-index="${i}" class="p-3 rounded-lg bg-white border border-[#bdd7ff] cursor-move hover:bg-[#eaf2ff] transition">
+        ${file.name}
+      </li>`;
+  });
+}
+
+// enable drag sorting
+new Sortable(document.getElementById("fileList"), {
+  animation: 150,
+  onEnd: () => {
+    const newOrder = [];
+    document.querySelectorAll("#fileList li").forEach(li => {
+      newOrder.push(filesArray[li.dataset.index]);
+    });
+    filesArray = newOrder;
+    renderList();
+  }
+});
+
+// merge PDF
+document.getElementById("mergeBtn").addEventListener("click", async () => {
+  if (filesArray.length < 2) return alert("Minimal 2 PDF ya 😭");
+
+  const mergedPdf = await PDFLib.PDFDocument.create();
+
+  for (let file of filesArray) {
+    const pdf = await PDFLib.PDFDocument.load(await file.arrayBuffer());
+    const pages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+    pages.forEach(p => mergedPdf.addPage(p));
+  }
+
+  const blob = new Blob([await mergedPdf.save()], { type: "application/pdf" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "merged.pdf";
+  link.click();
+});
+
+// drag & drop visual
+const dropArea = document.getElementById("dropArea");
+dropArea.addEventListener("dragover", e => {
+  e.preventDefault();
+  dropArea.classList.add("border-[#2c6edb]", "bg-[#eaf2ff]");
+});
+dropArea.addEventListener("dragleave", () => {
+  dropArea.classList.remove("border-[#2c6edb]", "bg-[#eaf2ff]");
+});
+dropArea.addEventListener("drop", e => {
+  e.preventDefault();
+  dropArea.classList.remove("border-[#2c6edb]", "bg-[#eaf2ff]");
+  for (let f of e.dataTransfer.files) filesArray.push(f);
+  renderList();
+});
+</script>
+
+</body>
+</html>
