@@ -14,6 +14,18 @@
       background: linear-gradient(135deg, #a7cdf8, #5aa2e8 60%, #6bbff4);
       min-height: 100vh;
     }
+    /* <-- START: Tambahan CSS untuk Loading --> */
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .spinner {
+      animation: spin 1s linear infinite;
+    }
+    .disabled-btn {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+    /* <-- END: Tambahan CSS untuk Loading --> */
   </style>
 </head>
 
@@ -42,6 +54,26 @@
 
 <script>
 let filesArray = [];
+
+// fungsi buat ngontrol tampilan loading di tombol
+function setLoading(isLoading) {
+  const mergeBtn = document.getElementById("mergeBtn");
+  
+  if (isLoading) {
+    // Kalo lagi loading
+    mergeBtn.classList.add("disabled-btn"); // Bikin tombol keliatan disabled
+    mergeBtn.disabled = true; // Beneran disable biar gak diklik berkali-kali
+    mergeBtn.innerHTML = `
+      <span class="inline-block spinner">⚙️</span>
+      Merging...
+    `; // Ganti teks dan kasih spinner/ikon muter
+  } else {
+    // Kalo udah kelar loading
+    mergeBtn.classList.remove("disabled-btn");
+    mergeBtn.disabled = false;
+    mergeBtn.innerHTML = "Merge PDF ✨"; // Balikin ke teks awal
+  }
+}
 
 // klik area buat trigger upload
 document.getElementById("dropArea").addEventListener("click", () => {
@@ -75,7 +107,9 @@ new Sortable(document.getElementById("fileList"), {
       newOrder.push(filesArray[li.dataset.index]);
     });
     filesArray = newOrder;
-    renderList();
+    // Gak perlu renderList() lagi di sini karena Sortable udah ngubah DOM, 
+    // kita cuma perlu update filesArray aja. Tapi di code aslimu ada, jadi kita pertahanin aja biar konsisten
+    renderList(); 
   }
 });
 
@@ -83,19 +117,32 @@ new Sortable(document.getElementById("fileList"), {
 document.getElementById("mergeBtn").addEventListener("click", async () => {
   if (filesArray.length < 2) return alert("Minimal 2 PDF ya 😭");
 
-  const mergedPdf = await PDFLib.PDFDocument.create();
+  setLoading(true); // 🔥 NYALAIN LOADING 🔥
 
-  for (let file of filesArray) {
-    const pdf = await PDFLib.PDFDocument.load(await file.arrayBuffer());
-    const pages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
-    pages.forEach(p => mergedPdf.addPage(p));
+  try {
+    const mergedPdf = await PDFLib.PDFDocument.create();
+
+    for (let file of filesArray) {
+      const pdf = await PDFLib.PDFDocument.load(await file.arrayBuffer());
+      const pages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+      pages.forEach(p => mergedPdf.addPage(p));
+    }
+
+    const blob = new Blob([await mergedPdf.save()], { type: "application/pdf" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "merged.pdf";
+    link.click();
+    
+    // Opsional: Kasih notifikasi sukses?
+    // alert("Merge sukses! File sudah didownload. 🎉");
+
+  } catch (error) {
+    console.error("Gagal merge PDF:", error);
+    alert("Ups! Ada yang error saat merge. Coba lagi ya.");
+  } finally {
+    setLoading(false); // 🔥 MATIIN LOADING (di sini juga kalo ada error) 🔥
   }
-
-  const blob = new Blob([await mergedPdf.save()], { type: "application/pdf" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = "merged.pdf";
-  link.click();
 });
 
 // drag & drop visual
@@ -110,7 +157,9 @@ dropArea.addEventListener("dragleave", () => {
 dropArea.addEventListener("drop", e => {
   e.preventDefault();
   dropArea.classList.remove("border-[#2c6edb]", "bg-[#eaf2ff]");
-  for (let f of e.dataTransfer.files) filesArray.push(f);
+  for (let f of e.dataTransfer.files) {
+    if (f.type === "application/pdf") filesArray.push(f); // Filter PDF biar aman
+  }
   renderList();
 });
 </script>
